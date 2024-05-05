@@ -1,9 +1,11 @@
 import cors from 'cors';
-import express from 'express';
+import express, { json } from 'express';
 import multer from 'multer';
 import {v4 as uuidv4} from 'uuid';
 import path from 'path';
 import fs from 'fs'
+import {exec} from "child_process"
+import { stderr, stdout } from 'process';
 
 const app = express();
 
@@ -51,7 +53,36 @@ app.get("/", (req, res)=>{
 })
 
 app.post("/upload"  , upload.single('file'),function(req , res){
-    console.log("file uploaded");
+    const lessonId = uuidv4();
+    const videoPath = req.file.path;
+    const outputPath = `./uploads/courses/${lessonId}`;
+    const hlsPath = `${outputPath}/index.m3u8`
+    console.log("hlsPath" , hlsPath);
+
+    if(!fs.existsSync(outputPath)){
+        fs.mkdirSync(outputPath , {recursive : true})
+    }
+
+    // ffmpeg ...
+    const ffmpegCommand = `ffmpeg -i ${videoPath} -codec:v libx264 -codec:a aac -hls_time 10 -hls_playlist_type vod -hls_segment_filename "${outputPath}/segment%03d.ts" -start_number 0 ${hlsPath}`
+    
+    
+    // creating the child process ...
+    exec(ffmpegCommand , (error , stdout , stderr)=>{
+        if(error){
+            console.log(`exec error : ${error}`);
+        }
+        console.log(`stdout : ${stdout}`);
+        console.log(`stderr  : ${stderr}`);
+
+        const videoUrl = `http://localhost:8000/uploads/courses/${lessonId}/index.m3u8`;
+
+        res = json({
+            message : "Video converted  to HLS format",
+            videoUrl : videoUrl ,
+            lessonId : lessonId,
+        })
+    })
 })
 
 
